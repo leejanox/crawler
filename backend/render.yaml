@@ -1,0 +1,14 @@
+# Render 자동 배포 설정
+
+services:
+  - type: web
+    name: crawler-api
+    env: python
+    plan: free
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    buildCommand: |
+      pip install -r requirements.txt
+      python -m uvicorn main:app --host 0.0.0.0 --port 10000
+    healthCheckPath: /health
+    healthCheckTimeout: 30
+    healthCheckInterval: 30
