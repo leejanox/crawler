@@ -106,8 +106,12 @@ button {
     background-color: #333;
     color: #fff;
     font-size: 14px;
+    border-top: 1px solid #333;
 }
 
+.post-list table th:first-child {
+    border-left: 1px solid #333;
+}
 .post-list table th:not(:nth-child(3)) {
     width: 100px;
 }
@@ -119,6 +123,10 @@ button {
     padding: 8px;
     border-bottom: 1px solid #333;
     border-right: 1px solid #333;
+}
+
+.post-list table td:first-child {
+    border-left: 1px solid #333;
 }
 
 .post-list table td:not(:nth-child(3)) {
