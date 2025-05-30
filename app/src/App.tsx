@@ -31,6 +31,7 @@ function App() {
   return (
     <div className="container">
       <section id="all-posts" className="section">
+        <h1>아카이브</h1>
         <div className='menu'>
           {menus.map((menu) => (
             <button key={menu}
