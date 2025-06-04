@@ -137,29 +137,53 @@ class DataFilter(threading.Thread):
         self.input_queue = input_queue
         self.output_queue_excel = output_queue_excel
         self.output_queue_csv = output_queue_csv
-        self.prev_data = []
+        # self.prev_data = []
+        self.prev_data = set() # [] 로 하면 성능 저하
         
     def run(self):
+        # while True:
+        #     data = self.input_queue.get()
+        #     filtered_data = {
+        #         'cook82': [row for row in data['cook82'] if row not in self.prev_data],
+        #         'powderRoom': [row for row in data['powderRoom'] if row not in self.prev_data],
+        #         'momsHolic': [row for row in data['momsHolic'] if row not in self.prev_data],
+        #         'lemonT': [row for row in data['lemonT'] if row not in self.prev_data],
+        #         'momBeBe': [row for row in data['momBeBe'] if row not in self.prev_data]
+        #     }
+        #     if filtered_data:
+        #         for rows in filtered_data.values():
+        #             self.prev_data.extend(rows)
+        #         self.output_queue_excel.put(filtered_data)
+        #         self.output_queue_csv.put(filtered_data)
+        #         print(f'필터링 완료 {sum(len(rows) for rows in filtered_data.values())}개 새로운 데이터')
+        #     else:
+        #         print('필터링 실패 or 중복 데이터 없음')
+        #         time.sleep(5)
+        #     self.input_queue.task_done()
         while True:
             data = self.input_queue.get()
             filtered_data = {
-                'cook82': [row for row in data['cook82'] if row not in self.prev_data],
-                'powderRoom': [row for row in data['powderRoom'] if row not in self.prev_data],
-                'momsHolic': [row for row in data['momsHolic'] if row not in self.prev_data],
-                'lemonT': [row for row in data['lemonT'] if row not in self.prev_data],
-                'momBeBe': [row for row in data['momBeBe'] if row not in self.prev_data]
+                key: [row for row in rows if tuple(row) not in self.prev_data]
+                for key, rows in data.items()
             }
-            if filtered_data:
+
+            new_data_count = sum(len(rows) for rows in filtered_data.values())
+
+            if new_data_count > 0:
+                # 새 데이터 누적
                 for rows in filtered_data.values():
-                    self.prev_data.extend(rows)
+                    self.prev_data.update(tuple(row) for row in rows) # set에 튜플 형태로 저장
                 self.output_queue_excel.put(filtered_data)
                 self.output_queue_csv.put(filtered_data)
-                print(f'필터링 완료 {sum(len(rows) for rows in filtered_data.values())}개 새로운 데이터')
+                print(f'필터링 완료 {new_data_count}개 새로운 데이터')
             else:
                 print('필터링 실패 or 중복 데이터 없음')
-                time.sleep(5)
+                time.sleep(1)
+
             self.input_queue.task_done()
+                
             
+
 class DataSaveExcel(threading.Thread):
     def __init__(self, input_queue):
         super().__init__()
@@ -169,7 +193,8 @@ class DataSaveExcel(threading.Thread):
         self.file_path = None
         
     def _create_new_workbook(self, today):
-        self.file_path = fr'D:\Kim goeun\database\cafe_croll_{today}.xlsx'
+        #self.file_path = fr'D:\Kim goeun\database\cafe_crawler_{today}.xlsx'
+        self.file_path = fr'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{today}.xlsx'
         self.wb = op.Workbook()
         
         default_sheet = self.wb.active
@@ -190,7 +215,15 @@ class DataSaveExcel(threading.Thread):
             data = self.input_queue.get()
             # 날짜 갱신
             today = datetime.datetime.today().strftime('%Y%m%d')
-            file_path = fr'D:\Kim goeun\database\cafe_croll_{today}.xlsx'
+            # file_path = fr'D:\Kim goeun\database\cafe_crawler_{today}.xlsx'
+            #file_path = fr'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{today}.xlsx'
+            file_path = os.path.join(
+                fr'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{today}',
+                f'cafe_crawler_{today}.xlsx'
+            )
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            # 날짜마다 파일 경로 갱신
+            self.file_path = file_path 
 
             if not os.path.exists(file_path):
                 self._create_new_workbook(today)
@@ -198,19 +231,24 @@ class DataSaveExcel(threading.Thread):
                 self.wb = op.load_workbook(self.file_path)
                 print(f'{today} 엑셀 파일 로드 완료')
 
-            for sheet_name in data.keys():
-                if sheet_name not in self.wb.sheetnames:
-                    self.wb.create_sheet(title=sheet_name)
-                    ws = self.wb[sheet_name]
-                    ws.append(['게시판', '번호', '제목', '작성자', '작성일', '조회수'])
-                else:
-                    ws = self.wb[sheet_name]
-                for row in data[sheet_name]:
-                    ws.append(row)
-            self.wb.save(self.file_path)
-            self.wb.close()
-            self.input_queue.task_done()
-            time.sleep(5)
+            try:
+                for sheet_name in data.keys():
+                    if sheet_name not in self.wb.sheetnames:
+                        self.wb.create_sheet(title=sheet_name)
+                        ws = self.wb[sheet_name]
+                        ws.append(['게시판', '번호', '제목', '작성자', '작성일', '조회수'])
+                    else:
+                        ws = self.wb[sheet_name]
+                    for row in data[sheet_name]:
+                        ws.append(row)
+                self.wb.save(self.file_path)
+            except Exception as e:
+                print(f'{today} 엑셀 파일 저장 오류 : {e}')
+            finally:
+                if self.wb:
+                self.wb.close()
+                self.input_queue.task_done()
+                time.sleep(5)
 
 class DataSaveCSV(threading.Thread):
     def __init__(self, input_queue):
@@ -222,7 +260,8 @@ class DataSaveCSV(threading.Thread):
             data = self.input_queue.get()
             
             today = datetime.datetime.today().strftime('%Y%m%d')
-            folder_path = fr'D:\Kim goeun\database\cafe_croll_{today}'
+            # folder_path = fr'D:\Kim goeun\database\cafe_crawler_{today}'
+            folder_path = fr'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{today}'
             os.makedirs(folder_path, exist_ok=True)
 
             for cafe, rows in data.items():
