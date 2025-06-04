@@ -1,6 +1,0 @@
-fastapi
-uvicorn
-selenium
-python-multipart
-aiofiles
-sqlite3 ; or use built-in

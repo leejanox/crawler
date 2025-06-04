@@ -54,10 +54,11 @@ class DataCollector(threading.Thread):
             board = '자유게시판'
             i = tds[0].text.strip()
             title = tds[1].text.strip() # 마지막에 댓글수 나옴
+            link = tds[1].find_element(By.TAG_NAME,'a').get_attribute('href')
             writer = tds[2].text.strip()
             date = tds[3].text.strip()
             view = tds[4].text.strip()
-            row_data = [board, i, title, writer, date, view]
+            row_data = [board, i, title, writer, date, view, link]
             data_list.append(row_data)
         return data_list
     
@@ -75,10 +76,11 @@ class DataCollector(threading.Thread):
             board = row.find_element(By.CLASS_NAME,'board_name').text.strip()
             i = idx + 1
             title = row.find_element(By.CLASS_NAME,'article').text.strip()
+            link = row.find_element(By.CLASS_NAME,'article').get_attribute('href')
             writer = row.find_element(By.CLASS_NAME,'nickname').text.strip()
             date = row.find_element(By.CLASS_NAME,'td_normal.type_date').text.strip()
             view = row.find_element(By.CLASS_NAME,'td_normal.type_readCount').text.strip()
-            row_data = [board, i, title, writer, date, view]
+            row_data = [board, i, title, writer, date, view, link]
             data_list.append(row_data)
         return data_list
             
@@ -200,7 +202,7 @@ class DataSaveExcel(threading.Thread):
         default_sheet = self.wb.active
         self.wb.remove(default_sheet)
         
-        header_row = ['게시판', '번호', '제목', '작성자', '작성일', '조회수']
+        header_row = ['게시판', '번호', '제목', '작성자', '작성일', '조회수', '링크']
         sheet_names = ['cook82', 'powderRoom', 'momsHolic', 'lemonT', 'momBeBe']
         
         for sheet_name in sheet_names:
@@ -236,7 +238,7 @@ class DataSaveExcel(threading.Thread):
                     if sheet_name not in self.wb.sheetnames:
                         self.wb.create_sheet(title=sheet_name)
                         ws = self.wb[sheet_name]
-                        ws.append(['게시판', '번호', '제목', '작성자', '작성일', '조회수'])
+                        ws.append(['게시판', '번호', '제목', '작성자', '작성일', '조회수', '링크'])
                     else:
                         ws = self.wb[sheet_name]
                     for row in data[sheet_name]:
@@ -246,7 +248,7 @@ class DataSaveExcel(threading.Thread):
                 print(f'{today} 엑셀 파일 저장 오류 : {e}')
             finally:
                 if self.wb:
-                self.wb.close()
+                    self.wb.close()
                 self.input_queue.task_done()
                 time.sleep(5)
 
@@ -271,7 +273,7 @@ class DataSaveCSV(threading.Thread):
                 with open(file_path, mode='a', newline='', encoding='utf-8-sig') as f:
                     writer = csv.writer(f)
                     if is_new_file:
-                        writer.writerow(['게시판', '번호', '제목', '작성자', '작성일', '조회수'])
+                        writer.writerow(['게시판', '번호', '제목', '작성자', '작성일', '조회수', '링크'])
                     writer.writerows(rows)
             
             print(f'{today} CSV 저장 완료')
