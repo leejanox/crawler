@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react"
-import DataPicker from "react-datepicker"
 import 'react-datepicker/dist/react-datepicker.css'
 import './App.css'
 import { SearchIcon } from "lucide-react"
@@ -15,55 +14,71 @@ type Post = {
   site : string;
 }
 
-function App() {
+type GroupedPosts = {
+  [board: string]: Post[];
+}
 
-  const menus = ['랭킹순', '82cook', 'momsHolic','mombebe','lemonTeras','powderRoom'];
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+function App() {
+  const menus = ['cook82', 'momsHolic','momBeBe','lemonT','powderRoom'];
+  const [posts, setPosts] = useState<GroupedPosts>({});
+  const [date, setDate] = useState<string>('20250604');
   const [order, setOrder] = useState<'desc' | 'asc'>('desc');
   const [page, setPage] = useState<number>(1);
   const [search, setSearch] = useState<string>('');
 
-  const [isAll, setIsAll] = useState<boolean>(false);
   const [menu, setMenu] = useState<string>('all');
 
   const handleMenuClick = (menu: string) => {
     setMenu(menu);
-    if (menu === 'all') setIsAll(true);
-    else setIsAll(false);
+    setPage(1); // 메뉴 바뀌면 페이지 초기화
   }
 
   const fetchPosts = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/posts/rank?date=${date}&order=${order}&page=${page}&size=20`);
+      const response = await fetch(
+        `http://localhost:8000/posts/rank?date=${date}&order=${order}&page=${page}&size=20`
+      );
       const data = await response.json();
-      setPosts(data.posts);
+      console.log('📡 API 응답:', data);
+  
+      if (data.posts && typeof data.posts === 'object') {
+        setPosts(data.posts);  // 게시판별 객체
+      } else {
+        setPosts({});
+      }
     } catch (error) {
-      console.error('데이터를 불러오는데 실패했습니다.', error);
+      console.error('데이터 로드 실패:', error);
+      setPosts({});
     }
-  }
+  };
+  
+  useEffect(() => {
+    fetchPosts();
 
-
-  useEffect(()=>{
-
-  },[date, order, search, menu, page])
+    console.log(posts);
+  }, [date, order, search, menu, page]);
   
   return (
     <div className="container">
       <section id="all-posts" className="section">
         <h1>아카이브</h1>
         <div className='menu'>
-          {menus.map((menu) => (
-            <button key={menu}
-              className={`menu__item ${menu === menu ? 'active' : ''}`} 
-              onClick={() => handleMenuClick(menu)}
+          {menus.map((menuName) => (
+            <button key={menuName}
+              className={`menu__item ${menu === menuName ? 'active' : ''}`} 
+              onClick={() => handleMenuClick(menuName)}
             >
-              {menu}
+              {menuName}
             </button>
           ))}
         </div>
         <div className="search-bar">
-          <input type="text" placeholder="검색어를 입력하세요" />
+          <input 
+            type="text" 
+            placeholder="검색어를 입력하세요" 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
           <button>
             <SearchIcon />
           </button>
@@ -82,63 +97,38 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {/* {Array.from({length:30}).map((_, index) => (
-                <tr key={index}>
-                  <td>게시판</td>
-                  <td>1</td>
-                  <td>제목</td>
-                  <td>작성자</td>
-                  <td>작성일</td>
-                  <td>조회수</td>
-                </tr>
-              ))} */}
-              {posts.map((post, index) => (
-                <tr key={index}>
-                  <td>{post.게시판}</td>
-                  <td>{post.번호}</td>
-                  <td>{post.제목}</td>
-                  <td>{post.작성자}</td>
-                  <td>{post.작성일}</td>
-                  <td>{post.조회수}</td>
-                  <td>{post.링크}</td>
-                </tr>
+              {Object.entries(posts).map(([boardName, postList]) => (
+                <>
+                  <tr key={boardName}>
+                    <td colSpan={7} style={{ fontWeight: 'bold', backgroundColor: '#eee' }}>
+                      {boardName}
+                    </td>
+                  </tr>
+                  {postList.map((post, index) => (
+                    <tr key={`${boardName}-${index}`}>
+                      <td>{post.게시판}</td>
+                      <td>{post.번호}</td>
+                      <td>{post.제목}</td>
+                      <td>{post.작성자}</td>
+                      <td>{post.작성일}</td>
+                      <td>{post.조회수}</td>
+                      <td><a href={post.링크} target="_blank" rel="noopener noreferrer">바로가기</a></td>
+                    </tr>
+                  ))}
+                </>
               ))}
             </tbody>
           </table>
         </div>
         <div className="pagination">
-          <button
-            onClick={() => setPage(1)}
-          >
-            처음
-          </button>
-          <button
-            onClick={() => setPage(page - 1)}
-          >
-            이전
-          </button>
-          <button
-            onClick={() => setPage(page)}
-          >{page}</button>
-          <button
-            onClick={() => setPage(page + 1)}
-          >{page+1}</button>
-          <button
-            onClick={() => setPage(page + 2)}
-          >{page+2}</button>
-          <button
-            onClick={() => setPage(page + 3)}
-          >{page+3}</button>
-          <button
-            onClick={() => setPage(page + 1)}
-          >
-            다음
-          </button>
-          <button
-            onClick={() => setPage(page + 10)}
-          >
-            마지막
-          </button>
+          <button onClick={() => setPage(1)}>처음</button>
+          <button onClick={() => setPage(prev => Math.max(1, prev - 1))}>이전</button>
+          <button>{page}</button>
+          <button onClick={() => setPage(page + 1)}>{page + 1}</button>
+          <button onClick={() => setPage(page + 2)}>{page + 2}</button>
+          <button onClick={() => setPage(page + 3)}>{page + 3}</button>
+          <button onClick={() => setPage(page + 1)}>다음</button>
+          <button onClick={() => setPage(page + 10)}>마지막</button>
         </div>
       </section>
     </div>

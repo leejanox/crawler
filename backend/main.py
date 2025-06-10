@@ -6,11 +6,13 @@ import os
 import datetime
 import glob
 
-app = FastAPI()
+app = FastAPI(debug=True)
 
 # CORS 설정
 origins = [
     "http://localhost:5000",
+    "http://localhost:3000",
+    "http://127.0.0.1:5000"
 ]
 
 app.add_middleware(
@@ -31,7 +33,9 @@ def rank_all(
     if date is None:    
         date = datetime.datetime.today().strftime('%Y%m%d')
     # 파일 경로 지정
-    folder_path = r'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{date}'
+    #folder_path = r'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{date}'
+    folder_path = os.path.join(r'D:\goeun\2_1\bigdata\crawler\backend', f'cafe_crawler_{date}')
+
 
     # 파일 존재 여부 확인
     if not os.path.exists(folder_path):
@@ -67,56 +71,61 @@ def rank_all(
     # 페이지 데이터 추출
     start_idx = (page - 1) * size
     end_idx = start_idx + size
-    page_data = rank_desc.iloc[start_idx:end_idx].to_dict(orient='records')
+    page_data = rank_desc.iloc[start_idx:end_idx] 
+    grouped = {}
 
+    for _, row in page_data.iterrows():
+        board = row['게시판']
+        row_dict = row.to_dict()
+        grouped.setdefault(board, []).append(row_dict)
 
     return {
         "date": date,
-        "posts": page_data,
+        "posts": grouped,
         "total_pages": total_pages,
         "current_page": page
     }
 
 
-@app.get("/posts/{date}/{menu}")
-def read_posts(date:str = None, menu:str = None,):
-    if date is None:
-        date = datetime.datetime.today().strftime('%Y%m%d')
+# @app.get("/posts/{date}/{menu}")
+# def read_posts(date:str = None, menu:str = None,):
+#     if date is None:
+#         date = datetime.datetime.today().strftime('%Y%m%d')
 
-    # 파일 경로 지정
-    folder_path = r'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{date}'
-    file_path = os.path.join(folder_path, f'{menu}.csv')
+#     # 파일 경로 지정
+#     folder_path = r'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{date}'
+#     file_path = os.path.join(folder_path, f'{menu}.csv')
 
-    # 파일 존재 여부 확인
-    if not os.path.exists(file_path):
-        return {"error": "파일이 존재하지 않습니다."}
+#     # 파일 존재 여부 확인
+#     if not os.path.exists(file_path):
+#         return {"error": "파일이 존재하지 않습니다."}
         
-    # 파일 읽기
-    df = pd.read_csv(file_path)
+#     # 파일 읽기
+#     df = pd.read_csv(file_path)
 
-    return df.to_dict(orient='records')
+#     return df.to_dict(orient='records')
 
-@app.get("/posts/search")
-def search_posts(date:str = None, menu:str = None, search:str = None):
-    if date is None:
-        date = datetime.datetime.today().strftime('%Y%m%d')
+# @app.get("/posts/search")
+# def search_posts(date:str = None, menu:str = None, search:str = None):
+#     if date is None:
+#         date = datetime.datetime.today().strftime('%Y%m%d')
 
-    # 파일 경로 지정
-    folder_path = r'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{date}'
-    file_path = os.path.join(folder_path, f'{menu}.csv')
+#     # 파일 경로 지정
+#     folder_path = r'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{date}'
+#     file_path = os.path.join(folder_path, f'{menu}.csv')
 
-    # 파일 존재 여부 확인
-    if not os.path.exists(file_path):
-        return {"error": "파일이 존재하지 않습니다."}
+#     # 파일 존재 여부 확인
+#     if not os.path.exists(file_path):
+#         return {"error": "파일이 존재하지 않습니다."}
     
-    # 파일 읽기
-    df = pd.read_csv(file_path)
+#     # 파일 읽기
+#     df = pd.read_csv(file_path)
 
-    # 검색 조건 적용
-    if search:
-        df = df[df['제목'].str.contains(search)]
+#     # 검색 조건 적용
+#     if search:
+#         df = df[df['제목'].str.contains(search)]
 
-    return df.to_dict(orient='records')
+#     return df.to_dict(orient='records')
 
 
 
