@@ -1,10 +1,10 @@
-from fastapi import FastAPI
-from fastapi import Query
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import os
 import datetime
 import glob
+from typing import Optional
 
 app = FastAPI(debug=True)
 
@@ -25,55 +25,73 @@ app.add_middleware(
 
 @app.get("/posts/rank")
 def rank_all(
-    date:str = Query(default=None, description="날짜 형식: YYYYMMDD"),
-    order:str = Query(default='desc', enum=['desc', 'asc'], description="정렬 방식: desc(내림차순), asc(오름차순)"),
-    page:int = Query(default=1, ge=1, description="페이지 번호"),
-    size:int = Query(default=20, ge=1, description="페이지 크기")
+    date: str = Query(default=None, description="날짜 형식: YYYYMMDD"),
+    order: str = Query(default='desc', enum=['desc', 'asc'], description="정렬 방식"),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1),
+    menu: Optional[str] = Query(default=None, description="csv 파일 이름 (예: cook82)"),
+    search: Optional[str] = Query(default=None, description="검색어(제목)")
 ):
-    if date is None:    
+    if date is None:
         date = datetime.datetime.today().strftime('%Y%m%d')
-    # 파일 경로 지정
-    #folder_path = r'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{date}'
-    folder_path = os.path.join(r'D:\goeun\2_1\bigdata\crawler\backend', f'cafe_crawler_{date}')
 
-
-    # 파일 존재 여부 확인
+    folder_path = os.path.join(r'D:\Kimgoeun\crawler\backend', f'cafe_crawler_{date}')
     if not os.path.exists(folder_path):
-        return {"error": "파일이 존재하지 않습니다."}
-    
+        return {"error": "해당 날짜 폴더가 존재하지 않습니다.", "date": date}
+
     all_csv_files = glob.glob(os.path.join(folder_path, '*.csv'))
     if not all_csv_files:
-        return {"error": "csv 파일이 존재하지 않습니다."}
-    
-    # 모든 csv 파일 읽기
+        return {"error": "CSV 파일이 존재하지 않습니다.", "date": date}
+
     dfs = []
     for file_path in all_csv_files:
         site = os.path.splitext(os.path.basename(file_path))[0]
-        df = pd.read_csv(file_path)
-        df['site'] = site
-        dfs.append(df)
-    
-    # 모든 데이터프레임 결합
-    merged_df = pd.concat(dfs, ignore_index=True)
-    
-    # 조회수 기준 정렬
-    merged_df['조회수']= pd.to_numeric(merged_df['조회수'],errors='coerce').fillna(0).astype(int)
-    if order == 'desc':
-        rank_desc = merged_df.sort_values(by='조회수', ascending=False) # 내림차순
-    else:
-        rank_desc = merged_df.sort_values(by='조회수', ascending=True) # 오름차순
+        if menu and site != menu:
+            continue
+        try:
+            df = pd.read_csv(file_path)
+            df['site'] = site
+            dfs.append(df)
+        except Exception as e:
+            print(f"파일 읽기 실패: {file_path}, 에러: {e}")
 
-    # 페이지 계산
-    total_pages = (len(rank_desc) + size - 1) // size
-    if page > total_pages:
-        return {"error": "존재하지 않는 페이지입니다."}
-    
-    # 페이지 데이터 추출
+    if not dfs:
+        return {"error": f"{menu}에 해당하는 유효한 데이터가 없습니다." if menu else "유효한 데이터가 없습니다."}
+
+    merged_df = pd.concat(dfs, ignore_index=True)
+
+    # 조회수 숫자형 변환
+    merged_df['조회수'] = pd.to_numeric(merged_df['조회수'], errors='coerce').fillna(0).astype(int)
+
+    # 제목 전처리 (공백 제거)
+    merged_df['제목'] = merged_df['제목'].astype(str).str.strip()
+
+    # 검색어 필터링
+    if search:
+        merged_df = merged_df[merged_df['제목'].str.contains(search, case=False, na=False)]
+
+    # 조회수 높은 순 정렬
+    merged_df.sort_values(by='조회수', ascending=False, inplace=True)
+
+    # 제목 기준 중복 제거
+    merged_df.drop_duplicates(subset=['제목'], keep='first', inplace=True)
+    # 번호 기준 중복 제거
+    merged_df = merged_df.drop_duplicates(subset=['번호'], keep='first')
+
+    # 요청된 정렬 순서(order)에 맞춰 다시 정렬
+    sorted_df = merged_df.sort_values(by='조회수', ascending=(order == 'asc'))
+
+    # 페이지네이션
+    total_pages = (len(sorted_df) + size - 1) // size
+    if page > total_pages and total_pages != 0:
+        return {"error": "존재하지 않는 페이지입니다.", "page": page, "total_pages": total_pages}
+
     start_idx = (page - 1) * size
     end_idx = start_idx + size
-    page_data = rank_desc.iloc[start_idx:end_idx] 
-    grouped = {}
+    page_data = sorted_df.iloc[start_idx:end_idx]
 
+    # 게시판별 그룹화
+    grouped = {}
     for _, row in page_data.iterrows():
         board = row['게시판']
         row_dict = row.to_dict()
@@ -81,51 +99,8 @@ def rank_all(
 
     return {
         "date": date,
+        "menu": menu,
         "posts": grouped,
         "total_pages": total_pages,
         "current_page": page
     }
-
-
-# @app.get("/posts/{date}/{menu}")
-# def read_posts(date:str = None, menu:str = None,):
-#     if date is None:
-#         date = datetime.datetime.today().strftime('%Y%m%d')
-
-#     # 파일 경로 지정
-#     folder_path = r'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{date}'
-#     file_path = os.path.join(folder_path, f'{menu}.csv')
-
-#     # 파일 존재 여부 확인
-#     if not os.path.exists(file_path):
-#         return {"error": "파일이 존재하지 않습니다."}
-        
-#     # 파일 읽기
-#     df = pd.read_csv(file_path)
-
-#     return df.to_dict(orient='records')
-
-# @app.get("/posts/search")
-# def search_posts(date:str = None, menu:str = None, search:str = None):
-#     if date is None:
-#         date = datetime.datetime.today().strftime('%Y%m%d')
-
-#     # 파일 경로 지정
-#     folder_path = r'D:\goeun\2_1\bigdata\crawler\backend\cafe_crawler_{date}'
-#     file_path = os.path.join(folder_path, f'{menu}.csv')
-
-#     # 파일 존재 여부 확인
-#     if not os.path.exists(file_path):
-#         return {"error": "파일이 존재하지 않습니다."}
-    
-#     # 파일 읽기
-#     df = pd.read_csv(file_path)
-
-#     # 검색 조건 적용
-#     if search:
-#         df = df[df['제목'].str.contains(search)]
-
-#     return df.to_dict(orient='records')
-
-
-
